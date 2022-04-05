@@ -1,0 +1,22 @@
+{
+    "name": "web/chat",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "chat",
+            "email": "chat@mail.com"
+        }
+    ],
+    "require": {
+
+    },
+    "autoload": {
+        "psr-4": {
+            "APP\\": "src/"
+        }
+    },
+    "require-dev": {
+        "eaglewu/swoole-ide-helper": "dev-master"
+    }
+}
