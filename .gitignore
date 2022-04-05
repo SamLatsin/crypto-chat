@@ -3,3 +3,4 @@
 /pgadmin/
 vendor/
 composer.lock
+push.sh
