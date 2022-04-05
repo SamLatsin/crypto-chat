@@ -97,3 +97,18 @@ services:
       - ./rootfilesystem/var/www:/var/www
     env_file:
       - .env
+  
+  ftp:
+    image: stilliard/pure-ftpd
+    container_name: ftpd
+    ports:
+      - "21:21"
+      - "30000-30009:30000-30009"
+    volumes:
+      - ./rootfilesystem/var/www:/var/www
+    environment:
+      PUBLICHOST: "localhost"
+      FTP_USER_NAME: "${FTP_USER}"
+      FTP_USER_PASS: "${FTP_PASSWORD}"
+      FTP_USER_HOME: /var/www/
+    restart: always
