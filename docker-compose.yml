@@ -101,6 +101,7 @@ services:
   ftp:
     image: stilliard/pure-ftpd
     container_name: ftpd
+    network_mode: host
     ports:
       - "21:21"
       - "30000-30009:30000-30009"
@@ -111,4 +112,5 @@ services:
       FTP_USER_NAME: "${FTP_USER}"
       FTP_USER_PASS: "${FTP_PASSWORD}"
       FTP_USER_HOME: /var/www/
+      FTP_MAX_CONNECTIONS: 50
     restart: always

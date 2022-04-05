@@ -45,7 +45,7 @@ class WebSocket
                 array_merge(['user' => $user], ['all' => $this->allUser()], ['type' => 'openSuccess'])
             )
         );
-        $this->pushMessage($server, "Welcome ".$user['name'], 'open', $request->fd);
+        $this->pushMessage($server, "Welcome home ".$user['name'], 'open', $request->fd);
     }
 
     private function allUser()
