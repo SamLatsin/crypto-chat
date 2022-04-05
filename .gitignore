@@ -1,0 +1,5 @@
+/.env
+/pgdata/
+/pgadmin/
+vendor/
+composer.lock
