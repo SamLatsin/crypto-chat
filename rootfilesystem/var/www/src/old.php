@@ -75,13 +75,13 @@
 //     $db->prepare('test', 'SELECT test FROM test.test');
 //     $res = $db->execute('test', []);
 //     $arr = $db->fetchAll($res);
-//     $data = [
-//       'code' => 'lolo1',
-//       'error' => false,
-//       'result'=>$arr,
-//     ];
-//     $response->header('Content-Type', 'application/json');   
-//     $response->end(json_encode($data));
+    // $data = [
+    //   'code' => 'lolo1',
+    //   'error' => false,
+    //   'result'=>$arr,
+    // ];
+    // $response->header('Content-Type', 'application/json');   
+    // $response->end(json_encode($data));
 // });
 
 // $http->start();
