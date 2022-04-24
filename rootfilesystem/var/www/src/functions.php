@@ -24,10 +24,21 @@ function escape($input, $urldecode = 0) {
     return $input;
 }
 
-function encrypt($text) {
-    return $text;
+function encrypt($encrypt, $key) {
+  $ciphering = "AES-256-CTR";
+  $iv_length = openssl_cipher_iv_length($ciphering);
+  $options = 0;
+  $encryption_iv = '1234561891011121';
+  $encoded = openssl_encrypt($encrypt, $ciphering,
+            $key, $options, $encryption_iv);
+  return $encoded;
 }
 
-function decrypt($text) {
-    return $text;
+function decrypt($decrypt, $key) {
+    $ciphering = "AES-256-CTR";
+    $decryption_iv = '1234561891011121';
+    $options = 0;
+    $decrypted=openssl_decrypt ($decrypt, $ciphering, 
+            $key, $options, $decryption_iv);
+    return $decrypted;
 }

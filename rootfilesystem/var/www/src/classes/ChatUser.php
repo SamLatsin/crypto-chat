@@ -17,6 +17,14 @@ class ChatUser{
     return $arr;
   }
 
+  function getUsersInChat($chat_id, $sender_id) {
+    $phql = 'SELECT user_id FROM '.$this->model.' WHERE chat_id = $1 and user_id != $2';
+    $this->db->prepare('get_users_in_chat', $phql);
+    $res = $this->db->execute('get_users_in_chat', [$chat_id, $sender_id]);
+    $arr = $this->db->fetchAll($res);
+    return $arr;
+  }
+
   function getChatsCount($user_id) {
     $phql = 'SELECT COUNT(DISTINCT cu.chat_id) FROM public.chats_users cu 
              INNER JOIN public.messages msg 

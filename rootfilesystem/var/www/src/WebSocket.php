@@ -84,13 +84,14 @@ class WebSocket
         $this->table->set($request->fd, $user);
     }
 
-    private function allUser()
-    {
-        $users = [];
+    private function getUsersFDsById($id) {
+        $fds = [];
         foreach ($this->table as $row) {
-            $users[] = $row;
+            if ($row['id'] == $id) {
+                $fds[] = $row['fd'];
+            }
         }
-        return $users;
+        return $fds;
     }
 
     public function request($request, $response)
@@ -127,7 +128,7 @@ class WebSocket
                     $messages = $Message->getUserMessagesByChatId($fields);
                     if ($Chat->isChatSecret($chat_id)) {
                         foreach ($messages as $key => $message) {
-                            $messages[$key]['content'] = decrypt($message['content']);
+                            $messages[$key]['content'] = decrypt($message['content'], getenv("ENCRYPT_KEY"));
                         }
                     }
                 }
@@ -241,13 +242,15 @@ class WebSocket
             $ChatUser = new ChatUser($db);
             $MessageStat = new MessageStat($db);
             $sender_id = $this->table->get($frame->fd)['id'];
+            $chat_id = $data["chat_id"];
             switch($data['task']){
+                case 'read':
+                    break;
                 case 'send_text':
-                    $chat_id = $data["chat_id"];
                     if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
                         if (!$ChatUser->isUserBlocked($chat_id, $sender_id)) {
                             if ($Chat->isChatSecret($chat_id)) {
-                                $data["data"] = encrypt($data["data"]);
+                                $data["data"] = encrypt($data["data"], getenv("ENCRYPT_KEY"));
                             }
                             $fields = [
                                 "content"=>$data["data"],
@@ -257,7 +260,8 @@ class WebSocket
                             $Message->insertMessage($fields);
                             $ChatUser->incrementUnreadCount($chat_id, $sender_id);
 
-                            $this->pushMessage($server, $frame->data, 'message', $frame->fd);
+                            $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                                   $frame->fd, json_decode($frame->data, true)["data"], 'text');
                         }
                         else {
                             // you are blocked
@@ -269,10 +273,9 @@ class WebSocket
 
                     break;
                 case 'update_text':
-                    $chat_id = $data["chat_id"];
                     if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
                         if ($Chat->isChatSecret($chat_id)) {
-                            $data["data"] = encrypt($data["data"]);
+                            $data["data"] = encrypt($data["data"], getenv("ENCRYPT_KEY"));
                         }
                         $fields = [
                             "content"=>$data["data"],
@@ -281,11 +284,11 @@ class WebSocket
                         ];
                         $Message->updateMessage($fields, $data['message_id'], true);
 
-                        $this->pushMessage($server, $frame->data, 'text', $frame->fd);
+                        $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                               $frame->fd, json_decode($frame->data, true)["data"], 'update');
                     }
                     break;
                 case 'delete_messages':
-                    $chat_id = $data["chat_id"];
                     if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
                         if ($Chat->isChatSecret($chat_id)) {
                             foreach ($data['ids'] as $key => $message_id) {
@@ -294,7 +297,8 @@ class WebSocket
                                     $ChatUser->decrementUnreadCount($chat_id, $sender_id);
                                 }
 
-                                $this->pushMessage($server, $frame->data, 'text', $frame->fd);
+                                $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                                       $frame->fd, $message_id, 'delete');
                             }
                         }
                         else {
@@ -309,7 +313,8 @@ class WebSocket
                                         $ChatUser->decrementUnreadCount($chat_id, $sender_id);
                                     }
 
-                                    $this->pushMessage($server, $frame->data, 'text', $frame->fd);
+                                    $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                                           $frame->fd, $message_id, 'delete');
                                 }
                             }
                             else {
@@ -319,15 +324,14 @@ class WebSocket
                                         'deleted_user_id'=>$sender_id,
                                     ];
                                     $MessageStat->insertMessageStat($fields);
-
-                                    $this->pushMessage($server, $frame->data, 'text', $frame->fd);
                                 }
                             }
                         }
                     }
                     break;
                 case 'custom_event':
-                    $this->pushMessage($server, $frame->data, 'text', $frame->fd);
+                    $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                           $frame->fd, $data['data'], 'custom_event');
                     break;
             }
         }
@@ -343,24 +347,57 @@ class WebSocket
         }
     }
 
-    private function pushMessage(Server $server, $message, $messageType, $frameFd)
-    {
-        $message = htmlspecialchars($message);
-        $datetime = date('Y-m-d H:i:s', time());
-        $user = $this->table->get($frameFd);
-        $server->push($frameFd, $message);
-        foreach ($this->table as $row) {
-            if ($frameFd == $row['fd']) {
-                continue;
+    private function sendToRecievers($server, $ChatUser, $chat_id, $sender_fd, $data, $type) {
+        $sender_id = $this->table->get($sender_fd)['id'];
+        $recievers = $ChatUser->getUsersInChat($chat_id, $sender_id);
+        foreach ($recievers as $key => $reciever) {
+            $fds = $this->getUsersFDsById($reciever['user_id']);
+            foreach ($fds as $key => $fd) {
+                $this->pushMessage($server, $data, $type, $fd, $sender_fd);
             }
-            $server->push($row['fd'], json_encode([
-                    'type' => $messageType,
-                    'message' => $message,
-                    'datetime' => $datetime,
-                    'user' => $user
-                ])
-            );
         }
+        $this->pushMessage($server, true, 'status', $sender_fd);
+    }
+
+    private function pushMessage(Server $server, $data, $messageType, $frameFd, $senderFd = false)
+    {
+        switch($messageType){
+            case 'status':
+                $data = [
+                    'type'=>'status',
+                    'result'=>$data,
+                    'time'=>date('Y-m-d H:i:s', time()),
+                ];
+                break;
+            case 'text':
+                $data = htmlspecialchars($data);
+                $data = [
+                    'type'=>'text',
+                    'content'=>$data,
+                    'sender'=>$this->table->get($senderFd),
+                    'time'=>date('Y-m-d H:i:s', time()),
+                ];
+                break;
+            case 'read':
+
+                break;
+            case 'delete':
+
+                break;
+            case 'update':
+
+                break;
+            case 'file':
+
+                break;
+            case 'img':
+
+                break;
+            case 'custom_event':
+
+                break;
+        }
+        $server->push($frameFd, json_encode($data));
     }
 
     private function createTable()
