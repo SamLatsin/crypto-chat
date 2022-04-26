@@ -35,21 +35,6 @@ class Chat{
               WHERE cht.user_id = $1 ORDER BY msg.id DESC 
               OFFSET $2 
               LIMIT $3';
-    // $phql = 'SELECT *
-    //          FROM public.chats_users cht
-    //          INNER JOIN
-    //          (
-    //           SELECT MAX(a.id) id, chat_id
-    //           FROM public.messages a
-    //           LEFT JOIN public.messages_stats b
-    //                       on a.id = b.message_id and b.user_id = $1
-    //                       WHERE b.user_id is null and b.is_deleted is false
-    //           GROUP BY chat_id
-    //          ) m2
-    //          ON cht.chat_id = m2.chat_id
-    //          INNER JOIN public.messages msg ON msg.id = m2.id
-    //          INNER JOIN public.chats chts ON chts.id = cht.chat_id
-    //          WHERE cht.user_id = $1 ORDER BY msg.id DESC OFFSET $2 LIMIT $3';
     $this->db->prepare('get_chats', $phql);
     $res = $this->db->execute('get_chats', $data);
     $arr = $this->db->fetchAll($res);
@@ -88,26 +73,4 @@ class Chat{
     $arr = $this->db->fetchAll($res);
     return $arr[0]['id'];
   }
-
-  // function updateChat($fields,$id,$upd=false){
-  //   $phql = 'UPDATE '.$this->model.' SET ';
-  //   $data = [];
-  //   $i = 1;
-  //   foreach ($fields as $key => $field) {
-  //     if($upd!=$key){
-  //       $values[] = $key.'=$'.$i;
-  //       array_push($data, $field);
-  //       $i += 1;
-  //     }
-  //   }
-  //   $valRes =  implode(', ',$values);
-  //   if(!$upd){
-  //     $phql = $phql.$valRes.' WHERE id='.$id;
-  //   }else{
-  //     $phql = $phql.$valRes.' WHERE '.$upd.'=$'.$upd;
-  //   }
-  //   $this->db->prepare('update', $phql);
-  //   $res = $this->db->execute('update', $data);
-  //   return $res;
-  // }
 }

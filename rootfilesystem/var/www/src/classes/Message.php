@@ -10,24 +10,6 @@ class Message{
       $this->model = "public.messages";
   }
 
-  // public function getMessages(){
-  //   $this->db->prepare('select', 'SELECT * FROM '.$this->model);
-  //   $res = $this->db->execute('select', []);
-  //   $arr = $this->db->fetchAll($res);
-  //   return $arr;
-  // }
-
-  // public function getMessagesByChatId($fields){
-  //   $data = [];
-  //   array_push($data, $fields['chat_id']);
-  //   array_push($data, $fields['offset']);
-  //   array_push($data, $fields['limit']);
-  //   $this->db->prepare('get_messages', 'SELECT * FROM '.$this->model." WHERE chat_id = $1 ORDER BY id ASC OFFSET $2 LIMIT $3");
-  //   $res = $this->db->execute('get_messages', $data);
-  //   $arr = $this->db->fetchAll($res);
-  //   return $arr;
-  // }
-
   public function getUserMessagesByChatId($fields){
     $data = [];
     array_push($data, $fields['user_id']);
@@ -46,13 +28,6 @@ class Message{
              ORDER BY a.id ASC
              OFFSET $3
              LIMIT $4';
-    // $phql = 'SELECT  a.*
-    //          FROM public.messages a
-    //           LEFT JOIN public.messages_stats b
-    //           on a.id = b.message_id and b.user_id = $1
-    //          WHERE a.chat_id = $2 and b.user_id is null and b.is_deleted is false ORDER BY a.id ASC
-    //          OFFSET $3
-    //          LIMIT $4';
     $this->db->prepare('get_messages', $phql);
     $res = $this->db->execute('get_messages', $data);
     $arr = $this->db->fetchAll($res);

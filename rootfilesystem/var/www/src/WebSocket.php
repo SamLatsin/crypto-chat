@@ -118,19 +118,23 @@ class WebSocket
             case 'get_messages':
                 $chat_id = $request->get['chat_id'] ?? 0;
                 $messages = false;
-                if ($ChatUser->isUserInChat($chat_id, $id)) {
-                    $fields = [
-                        'user_id'=>$id,
-                        'chat_id'=>$chat_id,
-                        'offset'=>$request->get["offset"] ?? 0,
-                        'limit'=>30
+                if (!$ChatUser->isUserInChat($chat_id, $id)) {
+                    $res = [
+                      'error'=>false,
+                      'result'=>$messages,
                     ];
-                    $messages = $Message->getUserMessagesByChatId($fields);
-                    // var_dump($messages);
-                    if ($Chat->isChatSecret($chat_id)) {
-                        foreach ($messages as $key => $message) {
-                            $messages[$key]['content'] = decrypt($message['content'], getenv("ENCRYPT_KEY"));
-                        }
+                    return $response->end(json_encode($res));
+                }
+                $fields = [
+                    'user_id'=>$id,
+                    'chat_id'=>$chat_id,
+                    'offset'=>$request->get["offset"] ?? 0,
+                    'limit'=>30
+                ];
+                $messages = $Message->getUserMessagesByChatId($fields);
+                if ($Chat->isChatSecret($chat_id)) {
+                    foreach ($messages as $key => $message) {
+                        $messages[$key]['content'] = decrypt($message['content'], getenv("ENCRYPT_KEY"));
                     }
                 }
                 $res = [
@@ -142,27 +146,27 @@ class WebSocket
                 $is_secret = $request->get['is_secret'] ?? false;
                 $is_secret = $is_secret ? 'true' : 'false';
                 $user_id = $request->get['user_id'] ?? null;
-                if (!$ChatUser->isUserBlocked($ChatUser->getUsersDialog($id, $user_id), $id)) {
-                    $chat_id = $ChatUser->getUsersDialog($id, $user_id, $is_secret);
-                    if (!$chat_id){ // create chat
-                        $fields = [
-                            'is_secret'=>$is_secret,
-                        ];
-                        $chat_id = $Chat->insertChat($fields);
-                        $ChatUser->insertChatUser(['chat_id'=>$chat_id,'user_id'=>$id]);
-                        $ChatUser->insertChatUser(['chat_id'=>$chat_id,'user_id'=>$user_id]);
-                    }
-                    $res = [
-                      'error'=>false,
-                      'result'=>$chat_id,
-                    ];
-                }
-                else {
+                if ($ChatUser->isUserBlocked($ChatUser->getUsersDialog($id, $user_id), $id)) {
                     $res = [
                       'error'=>true,
                       'result'=>"blocked",
                     ];
+                    return $response->end(json_encode($res));
                 }
+                $chat_id = $ChatUser->getUsersDialog($id, $user_id, $is_secret);
+                if (!$chat_id){ // create chat
+                    $fields = [
+                        'is_secret'=>$is_secret,
+                    ];
+                    $chat_id = $Chat->insertChat($fields);
+                    $ChatUser->insertChatUser(['chat_id'=>$chat_id,'user_id'=>$id]);
+                    $ChatUser->insertChatUser(['chat_id'=>$chat_id,'user_id'=>$user_id]);
+                }
+                $res = [
+                  'error'=>false,
+                  'result'=>$chat_id,
+                ];
+               
                 return $response->end(json_encode($res));
             case 'get_chats':
                 $fields = [
@@ -183,18 +187,26 @@ class WebSocket
                 return $response->end(json_encode($res));
             case 'delete_chat':
                 $chat_id = $request->get["chat_id"];
-                if ($ChatUser->isUserInChat($chat_id, $id)) {
-                    if ($Chat->isChatSecret($chat_id)) {
-                        $Chat->deleteChat($chat_id);
-                    }
-                    else {
-                        $fields = [
-                            'chat_id'=>$chat_id,
-                            'user_id'=>$id,
-                        ];
-                        $MessageStat->deleteLocalChat($fields);
-                    }
+                if (!$ChatUser->isUserInChat($chat_id, $id)) {
+                    $res = [
+                      'error'=>false,
+                      'result'=>false,
+                    ];
+                    return $response->end(json_encode($res));
                 }
+                if ($Chat->isChatSecret($chat_id)) {
+                    $Chat->deleteChat($chat_id);
+                    $res = [
+                      'error'=>false,
+                      'result'=>true,
+                    ];
+                    return $response->end(json_encode($res));
+                }
+                $fields = [
+                    'chat_id'=>$chat_id,
+                    'user_id'=>$id,
+                ];
+                $MessageStat->deleteLocalChat($fields);
                 $res = [
                   'error'=>false,
                   'result'=>true,
@@ -237,177 +249,179 @@ class WebSocket
         }
         $db = $this->init_db();
         $data = json_decode($frame->data, true);
-        if ($data) {
-            $Message = new Message($db);
-            $Chat = new Chat($db);
-            $ChatUser = new ChatUser($db);
-            $MessageStat = new MessageStat($db);
-            $sender_id = $this->table->get($frame->fd)['id'];
-            $chat_id = $data["chat_id"];
-            switch($data['task']){
-                case 'read':
-                    if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
-                        $fields = [
-                            "chat_id"=>$chat_id,
-                            "sender_user_id"=>$sender_id,
-                        ];
-                        $MessageStat->markAsRead($fields);
-                        $ChatUser->setZeroMessageCount($chat_id, $sender_id);
-                        $this->sendToRecievers($server, $ChatUser, $chat_id, 
-                                               $frame->fd, $chat_id, 'read');
-                    }
-                    break;
-                case 'send_text':
-                    if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
-                        if (!$ChatUser->isUserBlocked($chat_id, $sender_id)) {
-                            if ($Chat->isChatSecret($chat_id)) {
-                                $data["data"] = encrypt($data["data"], getenv("ENCRYPT_KEY"));
-                            }
-                            $fields = [
-                                "content"=>$data["data"],
-                                "chat_id"=>$chat_id,
-                                "sender_user_id"=>$sender_id,
-                            ];
-                            $message_id = $Message->insertMessage($fields);
-                            $fields = [
-                                'message_id'=>$message_id,
-                                'chat_id'=>$chat_id,
-                                'sender_user_id'=>$sender_id,
-                            ];
-                            $ChatUser->incrementUnreadCount($chat_id, $sender_id);
-                            $MessageStat->insertMessageStatForAllRecievers($fields);
-
-                            $this->sendToRecievers($server, $ChatUser, $chat_id, 
-                                                   $frame->fd, json_decode($frame->data, true)["data"], 'text');
-                        }
-                        else {
-                            // you are blocked
-                        }
-                        
-                    }
-                    break;
-                case 'send_file':
-
-                    break;
-                case 'update_text':
-                    if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
-                        if ($Chat->isChatSecret($chat_id)) {
-                            $data["data"] = encrypt($data["data"], getenv("ENCRYPT_KEY"));
-                        }
-                        $fields = [
-                            "content"=>$data["data"],
-                            "sender_user_id"=>$sender_id,
-                            "is_edited"=>true,
-                        ];
-                        $Message->updateMessage($fields, $data['message_id'], true);
-
-                        $this->sendToRecievers($server, $ChatUser, $chat_id, 
-                                               $frame->fd, json_decode($frame->data, true)["data"], 'update');
-                    }
-                    break;
-                case 'delete_messages':
-                    if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
-                        if ($Chat->isChatSecret($chat_id)) {
-                            foreach ($data['ids'] as $key => $message_id) {
-                                $Message->deleteMessage($message_id);
-                                $ChatsUser->decrementUnreadCountForDeletedMessage($message_id, $sender_id);
-                                $this->sendToRecievers($server, $ChatUser, $chat_id, 
-                                                       $frame->fd, $message_id, 'delete');
-                            }
-                        }
-                        else {
-                            if ($data["for_all"]) {
-                                foreach ($data['ids'] as $key => $message_id) {
-                                    $fields = [
-                                        "is_deleted"=>'true',
-                                        "sender_user_id"=>$sender_id,
-                                    ];
-                                    $Message->updateMessage($fields, $message_id, true);
-                                    $ChatsUser->decrementUnreadCountForDeletedMessage($message_id, $sender_id);
-                                    $this->sendToRecievers($server, $ChatUser, $chat_id, 
-                                                           $frame->fd, $message_id, 'delete');
-                                }
-                            }
-                            else {
-                                foreach ($data['ids'] as $key => $message_id) {
-                                    $fields = [
-                                        'message_id'=>$message_id,
-                                        'user_id'=>$sender_id,
-                                    ];
-                                    $MessageStat->deleteLocalMessage($fields);
-                                }
-                            }
-                        }
-                    }
-                    break;
-                case 'custom_event':
-                    $this->sendToRecievers($server, $ChatUser, $chat_id, 
-                                           $frame->fd, $data['data'], 'custom_event');
-                    break;
-            }
+        if (!$data) {
+            return;
         }
-        
+        $Message = new Message($db);
+        $Chat = new Chat($db);
+        $ChatUser = new ChatUser($db);
+        $MessageStat = new MessageStat($db);
+        $sender_id = $this->table->get($frame->fd)['id'];
+        $chat_id = $data["chat_id"];
+        switch($data['task']){
+            case 'read':
+                if (!$ChatUser->isUserInChat($chat_id, $sender_id)) {
+                    break;
+                }
+                $fields = [
+                    "chat_id"=>$chat_id,
+                    "sender_user_id"=>$sender_id,
+                ];
+                $MessageStat->markAsRead($fields);
+                $ChatUser->setZeroMessageCount($chat_id, $sender_id);
+
+                $out_data = [
+                    'type'=>'read',
+                    'content'=>$chat_id,
+                    'time'=>date('Y-m-d H:i:s', time()),
+                ];
+                $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                       $frame->fd, $out_data);
+                break;
+            case 'send_text':
+                if (!$ChatUser->isUserInChat($chat_id, $sender_id)) {
+                    break;
+                }
+                if ($ChatUser->isUserBlocked($chat_id, $sender_id)) {
+                    // you are blocked
+                    break;
+                }
+                if ($Chat->isChatSecret($chat_id)) {
+                    $data["data"] = encrypt($data["data"], getenv("ENCRYPT_KEY"));
+                }
+                $fields = [
+                    "content"=>$data["data"],
+                    "chat_id"=>$chat_id,
+                    "sender_user_id"=>$sender_id,
+                ];
+                $message_id = $Message->insertMessage($fields);
+                $fields = [
+                    'message_id'=>$message_id,
+                    'chat_id'=>$chat_id,
+                    'sender_user_id'=>$sender_id,
+                ];
+                $ChatUser->incrementUnreadCount($chat_id, $sender_id);
+                $MessageStat->insertMessageStatForAllRecievers($fields);
+
+                $out_data = htmlspecialchars(json_decode($frame->data, true)["data"]);
+                $out_data = [
+                    'type'=>'text',
+                    'content'=>$out_data,
+                    'sender'=>$sender_id,
+                    'time'=>date('Y-m-d H:i:s', time()),
+                ];
+
+                $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                       $frame->fd, $out_data);
+                break;
+            case 'send_file':
+
+                break;
+            case 'update_text':
+                if (!$ChatUser->isUserInChat($chat_id, $sender_id)) {
+                    break;
+                }
+                if ($Chat->isChatSecret($chat_id)) {
+                    $data["data"] = encrypt($data["data"], getenv("ENCRYPT_KEY"));
+                }
+                $fields = [
+                    "content"=>$data["data"],
+                    "sender_user_id"=>$sender_id,
+                    "is_edited"=>true,
+                ];
+                $Message->updateMessage($fields, $data['message_id'], true);
+                $out_data = [
+                    'message_id'=>$data['message_id'],
+                    'content'=>json_decode($frame->data, true)["data"],
+                ];
+                $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                       $frame->fd, $out_data, 'update');
+                break;
+            case 'delete_messages':
+                if (!$ChatUser->isUserInChat($chat_id, $sender_id)) {
+                    break;
+                }
+                if ($Chat->isChatSecret($chat_id)) {
+                    foreach ($data['ids'] as $key => $message_id) {
+                        $Message->deleteMessage($message_id);
+                        $ChatsUser->decrementUnreadCountForDeletedMessage($message_id, $sender_id);
+                        $out_data = [
+                            'type'=>'delete',
+                            'content'=>$message_id,
+                            'time'=>date('Y-m-d H:i:s', time()),
+                        ];
+                        $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                               $frame->fd, $out_id);
+                        break;
+                    }
+                }
+                if ($data["for_all"]) {
+                    foreach ($data['ids'] as $key => $message_id) {
+                        $fields = [
+                            "is_deleted"=>'true',
+                            "sender_user_id"=>$sender_id,
+                        ];
+                        $Message->updateMessage($fields, $message_id, true);
+                        $ChatsUser->decrementUnreadCountForDeletedMessage($message_id, $sender_id);
+
+                        $out_data = [
+                            'type'=>'delete',
+                            'content'=>$message_id,
+                            'time'=>date('Y-m-d H:i:s', time()),
+                        ];
+                        $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                               $frame->fd, $out_data);
+                        break;
+                    }
+                }
+                foreach ($data['ids'] as $key => $message_id) {
+                    $fields = [
+                        'message_id'=>$message_id,
+                        'user_id'=>$sender_id,
+                    ];
+                    $MessageStat->deleteLocalMessage($fields);
+                }
+                break;
+            case 'custom_event':
+                $out_data = [
+                    'type'=>'custom_event',
+                    'content'=>$data['data'],
+                    'sender'=>$sender_id,
+                    'time'=>date('Y-m-d H:i:s', time()),
+                ];
+                $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                       $frame->fd, $out_data);
+                break;
+        }
     }
 
     public function close(Server $server, $fd)
     {
         if ($this->table->get($fd)) {
             $user = $this->table->get($fd);
-            $this->pushMessage($server, $user['name']."Leave's the chat room", 'close', $fd);
             $this->table->del($fd);
         }
     }
 
-    private function sendToRecievers($server, $ChatUser, $chat_id, $sender_fd, $data, $type) {
+    private function sendToRecievers($server, $ChatUser, $chat_id, $sender_fd, $data) {
         $sender_id = $this->table->get($sender_fd)['id'];
         $recievers = $ChatUser->getUsersInChat($chat_id, $sender_id);
         foreach ($recievers as $key => $reciever) {
             $fds = $this->getUsersFDsById($reciever['user_id']);
             foreach ($fds as $key => $fd) {
-                $this->pushMessage($server, $data, $type, $fd, $sender_fd);
+                $this->pushMessage($server, $data, $fd, $sender_fd);
             }
         }
-        $this->pushMessage($server, true, 'status', $sender_fd);
+        $data = [
+            'type'=>'status',
+            'result'=>true,
+            'time'=>date('Y-m-d H:i:s', time()),
+        ];
+        $this->pushMessage($server, $data, $sender_fd);
     }
 
-    private function pushMessage(Server $server, $data, $messageType, $frameFd, $senderFd = false)
+    private function pushMessage(Server $server, $data, $frameFd, $senderFd = false)
     {
-        switch($messageType){
-            case 'status':
-                $data = [
-                    'type'=>'status',
-                    'result'=>$data,
-                    'time'=>date('Y-m-d H:i:s', time()),
-                ];
-                break;
-            case 'text':
-                $data = htmlspecialchars($data);
-                $data = [
-                    'type'=>'text',
-                    'content'=>$data,
-                    'sender'=>$this->table->get($senderFd),
-                    'time'=>date('Y-m-d H:i:s', time()),
-                ];
-                break;
-            case 'read':
-
-                break;
-            case 'delete':
-
-                break;
-            case 'update':
-
-                break;
-            case 'file':
-
-                break;
-            case 'img':
-
-                break;
-            case 'custom_event':
-
-                break;
-        }
         $server->push($frameFd, json_encode($data));
     }
 
