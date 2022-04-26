@@ -10,12 +10,12 @@ class ChatUser{
       $this->model = "public.chats_users";
   }
 
-  public function getChatsUsers(){
-    $this->db->prepare('select', 'SELECT * FROM '.$this->model);
-    $res = $this->db->execute('select', []);
-    $arr = $this->db->fetchAll($res);
-    return $arr;
-  }
+  // public function getChatsUsers(){
+  //   $this->db->prepare('select', 'SELECT * FROM '.$this->model);
+  //   $res = $this->db->execute('select', []);
+  //   $arr = $this->db->fetchAll($res);
+  //   return $arr;
+  // }
 
   function getUsersInChat($chat_id, $sender_id) {
     $phql = 'SELECT user_id FROM '.$this->model.' WHERE chat_id = $1 and user_id != $2';
@@ -26,12 +26,18 @@ class ChatUser{
   }
 
   function getChatsCount($user_id) {
-    $phql = 'SELECT COUNT(DISTINCT cu.chat_id) FROM public.chats_users cu 
-             INNER JOIN public.messages msg 
-             ON msg.chat_id = cu.chat_id
-             FULL OUTER JOIN public.messages_stats st 
-             ON st.message_id = msg.id 
-             WHERE cu.user_id = $1 and st.message_id IS NULL OR msg.id  IS NULL';
+    $phql =  'SELECT COUNT(DISTINCT cu.chat_id) FROM public.chats_users cu 
+              INNER JOIN public.messages msg 
+              ON msg.chat_id = cu.chat_id
+              INNER JOIN public.messages_stats st 
+              ON st.message_id = msg.id 
+              WHERE cu.user_id = $1 and st.user_id = $1 and st.is_deleted = false';
+    // $phql = 'SELECT COUNT(DISTINCT cu.chat_id) FROM public.chats_users cu 
+    //          INNER JOIN public.messages msg 
+    //          ON msg.chat_id = cu.chat_id
+    //          FULL OUTER JOIN public.messages_stats st 
+    //          ON st.message_id = msg.id 
+    //          WHERE cu.user_id = $1 and st.message_id IS NULL OR msg.id  IS NULL';
     $this->db->prepare('get_chats_count', $phql);
     $res = $this->db->execute('get_chats_count', [$user_id]);
     $arr = $this->db->fetchAll($res);
@@ -103,20 +109,47 @@ class ChatUser{
     return $arr;
   }
 
-  function decrementUnreadCount($chat_id, $user_id){
-    $phql = 'UPDATE '.$this->model.' SET unread_count = unread_count - 1 WHERE chat_id = $1 and user_id != $2';
-    $this->db->prepare('increment_unread_count', $phql);
-    $res = $this->db->execute('increment_unread_count', [$chat_id, $user_id]);
+  function setZeroMessageCount($chat_id, $user_id){
+    $phql = 'UPDATE '.$this->model.' SET unread_count = 0 WHERE chat_id = $1 and user_id != $2';
+    $this->db->prepare('set_zero_unread_count', $phql);
+    $res = $this->db->execute('set_zero_unread_count', [$chat_id, $user_id]);
     $arr = $this->db->fetchAll($res);
     return $arr;
   }
 
-  function deleteChatUser($id){
-    $phql  = "DELETE FROM ".$this->model." WHERE id = $1";
-    $this->db->prepare('delete', $phql);
-    $res = $this->db->execute('delete', [$id]);
-    return $res;
+  // function decrementUnreadCount($chat_id, $user_id){
+  //   $phql = 'UPDATE '.$this->model.' SET unread_count = unread_count - 1 WHERE chat_id = $1 and user_id != $2';
+  //   $this->db->prepare('increment_unread_count', $phql);
+  //   $res = $this->db->execute('increment_unread_count', [$chat_id, $user_id]);
+  //   $arr = $this->db->fetchAll($res);
+  //   return $arr;
+  // }
+
+  function decrementUnreadCountForDeletedMessage($message_id, $sender_id) {
+    $phql = 'UPDATE public.chats_users AS cu2
+             SET unread_count = cu.unread_count + 1
+             FROM public.messages_stats AS ms
+             INNER JOIN public.messages AS msg
+             ON msg.id = ms.message_id
+             INNER JOIN public.chats_users AS cu
+             ON cu.chat_id = msg.chat_id and cu.user_id = ms.user_id
+             WHERE  cu2.chat_id = cu.chat_id and 
+                    ms.is_read = false and 
+                    cu2.user_id = cu.user_id and 
+                    ms.message_id = $1 and 
+                    cu.user_id != $2';
+    $this->db->prepare('decrement_unread_count_for_deleted_message', $phql);
+    $res = $this->db->execute('decrement_unread_count_for_deleted_message', [$message_id, $sender_id]);
+    $arr = $this->db->fetchAll($res);
+    return $arr;
   }
+
+  // function deleteChatUser($id){
+  //   $phql  = "DELETE FROM ".$this->model." WHERE id = $1";
+  //   $this->db->prepare('delete', $phql);
+  //   $res = $this->db->execute('delete', [$id]);
+  //   return $res;
+  // }
 
   function insertChatUser($fields){
     $phql = 'INSERT INTO '.$this->model;
@@ -136,25 +169,25 @@ class ChatUser{
     return $res;
   }
 
-  function updateChatUser($fields,$id,$upd=false){
-    $phql = 'UPDATE '.$this->model.' SET ';
-    $data = [];
-    $i = 1;
-    foreach ($fields as $key => $field) {
-      if($upd!=$key){
-        $values[] = $key.'=$'.$i;
-        array_push($data, $field);
-        $i += 1;
-      }
-    }
-    $valRes =  implode(', ',$values);
-    if(!$upd){
-      $phql = $phql.$valRes.' WHERE id='.$id;
-    }else{
-      $phql = $phql.$valRes.' WHERE '.$upd.'=$'.$upd;
-    }
-    $this->db->prepare('update', $phql);
-    $res = $this->db->execute('update', $data);
-    return $res;
-  }
+  // function updateChatUser($fields,$id,$upd=false){
+  //   $phql = 'UPDATE '.$this->model.' SET ';
+  //   $data = [];
+  //   $i = 1;
+  //   foreach ($fields as $key => $field) {
+  //     if($upd!=$key){
+  //       $values[] = $key.'=$'.$i;
+  //       array_push($data, $field);
+  //       $i += 1;
+  //     }
+  //   }
+  //   $valRes =  implode(', ',$values);
+  //   if(!$upd){
+  //     $phql = $phql.$valRes.' WHERE id='.$id;
+  //   }else{
+  //     $phql = $phql.$valRes.' WHERE '.$upd.'=$'.$upd;
+  //   }
+  //   $this->db->prepare('update', $phql);
+  //   $res = $this->db->execute('update', $data);
+  //   return $res;
+  // }
 }

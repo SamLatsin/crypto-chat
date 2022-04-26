@@ -126,6 +126,7 @@ class WebSocket
                         'limit'=>30
                     ];
                     $messages = $Message->getUserMessagesByChatId($fields);
+                    // var_dump($messages);
                     if ($Chat->isChatSecret($chat_id)) {
                         foreach ($messages as $key => $message) {
                             $messages[$key]['content'] = decrypt($message['content'], getenv("ENCRYPT_KEY"));
@@ -245,6 +246,16 @@ class WebSocket
             $chat_id = $data["chat_id"];
             switch($data['task']){
                 case 'read':
+                    if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
+                        $fields = [
+                            "chat_id"=>$chat_id,
+                            "sender_user_id"=>$sender_id,
+                        ];
+                        $MessageStat->markAsRead($fields);
+                        $ChatUser->setZeroMessageCount($chat_id, $sender_id);
+                        $this->sendToRecievers($server, $ChatUser, $chat_id, 
+                                               $frame->fd, $chat_id, 'read');
+                    }
                     break;
                 case 'send_text':
                     if ($ChatUser->isUserInChat($chat_id, $sender_id)) {
@@ -257,8 +268,14 @@ class WebSocket
                                 "chat_id"=>$chat_id,
                                 "sender_user_id"=>$sender_id,
                             ];
-                            $Message->insertMessage($fields);
+                            $message_id = $Message->insertMessage($fields);
+                            $fields = [
+                                'message_id'=>$message_id,
+                                'chat_id'=>$chat_id,
+                                'sender_user_id'=>$sender_id,
+                            ];
                             $ChatUser->incrementUnreadCount($chat_id, $sender_id);
+                            $MessageStat->insertMessageStatForAllRecievers($fields);
 
                             $this->sendToRecievers($server, $ChatUser, $chat_id, 
                                                    $frame->fd, json_decode($frame->data, true)["data"], 'text');
@@ -293,10 +310,7 @@ class WebSocket
                         if ($Chat->isChatSecret($chat_id)) {
                             foreach ($data['ids'] as $key => $message_id) {
                                 $Message->deleteMessage($message_id);
-                                if (!$Message->isMessageRead($message_id)) {
-                                    $ChatUser->decrementUnreadCount($chat_id, $sender_id);
-                                }
-
+                                $ChatsUser->decrementUnreadCountForDeletedMessage($message_id, $sender_id);
                                 $this->sendToRecievers($server, $ChatUser, $chat_id, 
                                                        $frame->fd, $message_id, 'delete');
                             }
@@ -309,10 +323,7 @@ class WebSocket
                                         "sender_user_id"=>$sender_id,
                                     ];
                                     $Message->updateMessage($fields, $message_id, true);
-                                    if (!$Message->isMessageRead($message_id)) {
-                                        $ChatUser->decrementUnreadCount($chat_id, $sender_id);
-                                    }
-
+                                    $ChatsUser->decrementUnreadCountForDeletedMessage($message_id, $sender_id);
                                     $this->sendToRecievers($server, $ChatUser, $chat_id, 
                                                            $frame->fd, $message_id, 'delete');
                                 }
@@ -321,9 +332,9 @@ class WebSocket
                                 foreach ($data['ids'] as $key => $message_id) {
                                     $fields = [
                                         'message_id'=>$message_id,
-                                        'deleted_user_id'=>$sender_id,
+                                        'user_id'=>$sender_id,
                                     ];
-                                    $MessageStat->insertMessageStat($fields);
+                                    $MessageStat->deleteLocalMessage($fields);
                                 }
                             }
                         }
