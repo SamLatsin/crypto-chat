@@ -35,7 +35,7 @@ class MessageStat{
     $phql = 'UPDATE '.$this->model.' AS ms 
              SET is_deleted = true
              FROM public.messages AS msg
-             WHERE ms.user_id = $1 and msg.chat_id = $2';
+             WHERE ms.user_id = $1 and msg.chat_id = $2 and msg.id = ms.message_id';
     $this->db->prepare('delete_local_chat', $phql);
     $res = $this->db->execute('delete_local_chat', $data);
     return $res;
@@ -48,8 +48,8 @@ class MessageStat{
     $phql = 'UPDATE '.$this->model.'
              SET is_deleted=true
              WHERE message_id=$1 and user_id = $2';
-    $this->db->prepare('delete_local_message', $phql);
-    $res = $this->db->execute('delete_local_message', $data);
+    $this->db->prepare('delete_local_message_'.$fields['message_id'], $phql);
+    $res = $this->db->execute('delete_local_message_'.$fields['message_id'], $data);
     return $res;
   }
 

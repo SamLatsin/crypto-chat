@@ -4,3 +4,4 @@
 vendor/
 composer.lock
 push.sh
+/data

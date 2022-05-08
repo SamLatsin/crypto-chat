@@ -15,29 +15,45 @@ class Chat{
     array_push($data, $fields['user_id']);
     array_push($data, $fields['offset']);
     array_push($data, $fields['limit']);
-    $phql =  'SELECT *
+    $phql =  'SELECT cht.chat_id, cht.unread_count, cht.is_blocked, msg.*, ms.is_read, chts.is_secret , cu.user_id as second_user_id
               FROM public.chats_users cht
               INNER JOIN
               (
-                SELECT MAX(a.id) id, chat_id
-                FROM public.messages a
-                INNER JOIN public.messages_stats b
-                           ON a.id = b.message_id
-                           WHERE 
-                             b.user_id = $1 and 
-                             b.is_deleted is false and
-                             a.is_deleted is false
-                GROUP BY chat_id
+              SELECT MAX(a.id) id, chat_id
+              FROM public.messages a
+              INNER JOIN public.messages_stats b
+                     ON a.id = b.message_id
+                     WHERE 
+                     b.user_id = $1 and 
+                     b.is_deleted is false and
+                     a.is_deleted is false
+              GROUP BY chat_id
               ) m2
               ON cht.chat_id = m2.chat_id
               INNER JOIN public.messages msg ON msg.id = m2.id
               INNER JOIN public.chats chts ON chts.id = cht.chat_id
-              WHERE cht.user_id = $1 ORDER BY msg.id DESC 
+              INNER JOIN public.chats_users cu ON cu.chat_id = cht.chat_id and cu.role != 3
+              INNER JOIN public.messages_stats ms ON ms.user_id = cht.user_id and msg.id = ms.message_id
+              WHERE  cht.user_id = $1 and 
+                  cu.role != 3 and 
+                  cu.user_id != $1 
+              ORDER BY msg.id DESC 
               OFFSET $2 
               LIMIT $3';
     $this->db->prepare('get_chats', $phql);
     $res = $this->db->execute('get_chats', $data);
     $arr = $this->db->fetchAll($res);
+    return $arr;
+  }
+
+  function getChatInfoById($id) {
+    $phql  = "SELECT * FROM ".$this->model." WHERE id = $1";
+    $this->db->prepare('get_chat_info', $phql);
+    $res = $this->db->execute('get_chat_info', [$id]);
+    $arr = $this->db->fetchAll($res);
+    if ($arr) {
+      return $arr[0];
+    }
     return $arr;
   }
 

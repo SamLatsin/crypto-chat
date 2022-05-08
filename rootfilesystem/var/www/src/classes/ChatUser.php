@@ -10,7 +10,16 @@ class ChatUser{
       $this->model = "public.chats_users";
   }
 
-  function getUsersInChat($chat_id, $sender_id) {
+  function getChatUsersByChatId($chat_id, $sender_id) {
+    $phql  = 'SELECT user_id, role, is_blocked from '.$this->model.'
+              WHERE chat_id = $1 and role != 3 and user_id != $2';
+    $this->db->prepare('get_chat_users', $phql);
+    $res = $this->db->execute('get_chat_users', [$chat_id, $sender_id]);
+    $arr = $this->db->fetchAll($res);
+    return $arr;
+  }
+
+  function getUsersRecipients($chat_id, $sender_id) {
     $phql = 'SELECT user_id FROM '.$this->model.' WHERE chat_id = $1 and user_id != $2';
     $this->db->prepare('get_users_in_chat', $phql);
     $res = $this->db->execute('get_users_in_chat', [$chat_id, $sender_id]);
@@ -58,6 +67,32 @@ class ChatUser{
     return null;
   }
 
+  function getBlockedUsers($id) {
+    $phql =  'SELECT cu.user_id FROM public.chats AS ch
+              INNER JOIN 
+              (
+                SELECT chat_id FROM chats_users
+                where role != 3
+                GROUP BY chat_id
+                HAVING count(user_id) = 2
+              ) as c_u
+              ON c_u.chat_id = ch.id
+              INNER JOIN chats_users AS cu
+              ON ch.id = cu.chat_id
+              WHERE cu.user_id != $1 AND cu.is_blocked = true AND cu.role != 3 AND ch.is_secret = false';
+    $this->db->prepare('get_blocked_users', $phql);
+    $res = $this->db->execute('get_blocked_users', [$id]);
+    $arr = $this->db->fetchAll($res);
+    $res = false;
+    if ($arr) {
+      $res = [];
+      foreach ($arr as $key => $user) {
+        array_push($res, $user['user_id']);
+      }
+    }
+    return $res;
+  }
+
   function blockUser($chat_id, $user_id) {
     $phql = 'UPDATE '.$this->model.' SET is_blocked = true WHERE chat_id = $1 and user_id = $2';
     $this->db->prepare('block_user', $phql);
@@ -88,6 +123,13 @@ class ChatUser{
     return $arr;
   }
 
+  function isUserOwner($chat_id, $id){
+    $this->db->prepare('is_user_owner', 'SELECT user_id FROM '.$this->model.' WHERE chat_id = $1 and user_id = $2 and role=1');
+    $res = $this->db->execute('is_user_owner', [$chat_id, $id]);
+    $arr = $this->db->fetchAll($res);
+    return $arr;
+  }
+
   function incrementUnreadCount($chat_id, $user_id){
     $phql = 'UPDATE '.$this->model.' SET unread_count = unread_count + 1 WHERE chat_id = $1 and user_id != $2';
     $this->db->prepare('increment_unread_count', $phql);
@@ -97,7 +139,7 @@ class ChatUser{
   }
 
   function setZeroMessageCount($chat_id, $user_id){
-    $phql = 'UPDATE '.$this->model.' SET unread_count = 0 WHERE chat_id = $1 and user_id != $2';
+    $phql = 'UPDATE '.$this->model.' SET unread_count = 0 WHERE chat_id = $1 and user_id = $2';
     $this->db->prepare('set_zero_unread_count', $phql);
     $res = $this->db->execute('set_zero_unread_count', [$chat_id, $user_id]);
     $arr = $this->db->fetchAll($res);
@@ -106,7 +148,7 @@ class ChatUser{
 
   function decrementUnreadCountForDeletedMessage($message_id, $sender_id) {
     $phql = 'UPDATE public.chats_users AS cu2
-             SET unread_count = cu.unread_count + 1
+             SET unread_count = cu.unread_count - 1
              FROM public.messages_stats AS ms
              INNER JOIN public.messages AS msg
              ON msg.id = ms.message_id
@@ -117,8 +159,8 @@ class ChatUser{
                     cu2.user_id = cu.user_id and 
                     ms.message_id = $1 and 
                     cu.user_id != $2';
-    $this->db->prepare('decrement_unread_count_for_deleted_message', $phql);
-    $res = $this->db->execute('decrement_unread_count_for_deleted_message', [$message_id, $sender_id]);
+    $this->db->prepare('decrement_unread_count_for_deleted_message_'.$message_id, $phql);
+    $res = $this->db->execute('decrement_unread_count_for_deleted_message_'.$message_id, [$message_id, $sender_id]);
     $arr = $this->db->fetchAll($res);
     return $arr;
   }

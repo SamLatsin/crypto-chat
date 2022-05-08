@@ -14,20 +14,27 @@ class Message{
     $data = [];
     array_push($data, $fields['user_id']);
     array_push($data, $fields['chat_id']);
-    array_push($data, $fields['offset']);
+    // array_push($data, $fields['offset']);
+    array_push($data, $fields['last_id']);
     array_push($data, $fields['limit']);
-    $phql = 'SELECT a.*, b.is_read
+    $phql = 'SELECT a.*, b.is_read, c.role
              FROM public.messages a
              INNER JOIN public.messages_stats b
              ON a.id = b.message_id
+             INNER JOIN public.chats_users c
+             ON c.chat_id = a.chat_id AND c.user_id = a.sender_user_id
              WHERE 
                a.chat_id = $2 and 
                b.user_id = $1 and 
                b.is_deleted is false and
-               a.is_deleted is false
-             ORDER BY a.id ASC
-             OFFSET $3
-             LIMIT $4';
+               a.is_deleted is false';
+    if ($fields['last_id']) {
+      $phql .= ' AND a.id < $3 ORDER BY a.id DESC';
+    }
+    else {
+      $phql .= ' ORDER BY a.id DESC OFFSET $3';
+    }
+    $phql .= ' LIMIT $4';
     $this->db->prepare('get_messages', $phql);
     $res = $this->db->execute('get_messages', $data);
     $arr = $this->db->fetchAll($res);
@@ -43,8 +50,8 @@ class Message{
 
   function deleteMessage($id){
     $phql  = "DELETE FROM ".$this->model." WHERE id = $1";
-    $this->db->prepare('delete', $phql);
-    $res = $this->db->execute('delete', [$id]);
+    $this->db->prepare('delete_'.$id, $phql);
+    $res = $this->db->execute('delete_'.$id, [$id]);
     return $res;
   }
 
@@ -87,8 +94,8 @@ class Message{
     if ($for_user) {
       $phql = $phql.' and sender_user_id='.$fields['sender_user_id'];
     }
-    $this->db->prepare('update', $phql);
-    $res = $this->db->execute('update', $data);
+    $this->db->prepare('update_'.$id, $phql);
+    $res = $this->db->execute('update_'.$id, $data);
     return $res;
   }
 }
