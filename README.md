@@ -1,7 +1,7 @@
 # crypto-chat
 Instant messaging websocket server with unique features. Backend in [PHP](https://www.php.net) with [Swoole](https://openswoole.com) framework. Wire transport is JSON over websocket. Persistant storage is [PostgreSQL](https://www.postgresql.org). 
 ## Overview
-
+Fast, asynchronous and event-driven backend service that can solve the problem of embedding chat in your application. It's easy to deploy and support. 
 ### Use cases
 * Online marketplace
 * On-demand services
@@ -10,6 +10,7 @@ Instant messaging websocket server with unique features. Backend in [PHP](https:
 * Online dating
 * Enterprice communication
 * Social communities
+* Crypto P2P exchange
 ### Features
 * Instant messaging via websocket
 * Group chats
@@ -27,6 +28,7 @@ Instant messaging websocket server with unique features. Backend in [PHP](https:
 * HTTP requests optimization
 * High request proccess speed (around 110515 requests/sec on low-end server)
 * Automatic database backup
+* Stability and restart on fail
 * Easy and fast deploy
 * Works as an independent service
 ### What needs to be done
@@ -38,6 +40,8 @@ Instant messaging websocket server with unique features. Backend in [PHP](https:
 * Linux server
 * Domain
 ### Installation
+Read [API documentation](https://sam-latsin.gitbook.io/crypto-chat-api-eng/)
+
 From command line run:
 ```
 cd /var/www/
@@ -60,6 +64,7 @@ REST_AUTH_URL={URL to authentificate user in websocket}
 ENCRYPT_KEY={Key to encrypt messages on server}
 ```
 The next step is to configure SSL Certificate. Open `init-letsencrypt.sh` in project folder and change {DOMAIN} to your domain name. Repeat the same for file `nginx-default.conf`.
+
 Run application in project folder:
 ```
 docker compose up
