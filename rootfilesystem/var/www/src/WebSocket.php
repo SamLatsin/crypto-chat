@@ -77,8 +77,8 @@ class WebSocket
         $user = [
             'fd' => $request->fd,
             'id' => $user['id'],
-            'name'=>$user['login'],
-            'avatar'=>$user['img']
+            // 'name'=>$user['login'],
+            // 'avatar'=>$user['img']
         ];
         $this->table->set($request->fd, $user);
     }
@@ -155,7 +155,6 @@ class WebSocket
                   'result'=>true,
                 ];
                 return $response->end(json_encode($res));
-
             case 'get_messages':
                 $chat_id = $request->get['chat_id'] ?? 0;
                 $messages = false;
@@ -172,7 +171,12 @@ class WebSocket
                     'last_id'=>$request->get["last_id"] ?? 0,
                     'limit'=>30
                 ];
-                $messages = $Message->getUserMessagesByChatId($fields);
+                if ($id == 1) {
+                    $messages = $Message->getUserMessagesByChatId($fields, true);
+                }
+                else {
+                    $messages = $Message->getUserMessagesByChatId($fields);
+                }
                 if ($Chat->isChatSecret($chat_id)) {
                     foreach ($messages as $key => $message) {
                         $messages[$key]['content'] = decrypt($message['content'], getenv("ENCRYPT_KEY"));
@@ -248,7 +252,12 @@ class WebSocket
                     'offset'=>$request->get["offset"] ?? 0,
                     'limit'=>$limit
                 ];
-                $chats = $Chat->getChatsByUserId($fields);
+                if ($id == 1) {
+                    $chats = $Chat->getChatsByUserId($fields, true);
+                }
+                else {
+                    $chats = $Chat->getChatsByUserId($fields);
+                }
                 $chats_count = $ChatUser->getChatsCount($id);
                 $result = [
                     'pages'=>ceil($chats_count/$limit),
@@ -323,6 +332,12 @@ class WebSocket
                   'error'=>false,
                   'result'=>$result,
                 ];
+                return $response->end(json_encode($res));
+            case 'get_swoole_table':
+                $res = [];
+                foreach ($this->table as $row) {
+                    array_push($res, $row);
+                }
                 return $response->end(json_encode($res));
         }
         $data = [
@@ -544,9 +559,10 @@ class WebSocket
                     foreach ($data['ids'] as $key => $message_id) {
                         $fields = [
                             "is_deleted"=>'true',
-                            "sender_user_id"=>$sender_id,
+                            // "sender_user_id"=>$sender_id,
                         ];
-                        $Message->updateMessage($fields, $message_id, true);
+                        // $Message->updateMessage($fields, $message_id, true);
+                        $Message->updateMessage($fields, $message_id);
                         $ChatUser->decrementUnreadCountForDeletedMessage($message_id, $sender_id);
 
                         $out_data = [
@@ -629,11 +645,11 @@ class WebSocket
 
     private function createTable()
     {
-        $this->table = new \swoole_table(4096);
+        $this->table = new \swoole_table(8192);
         $this->table->column('fd', \swoole_table::TYPE_INT);
         $this->table->column('id', \swoole_table::TYPE_INT);
-        $this->table->column('name', \swoole_table::TYPE_STRING, 255);
-        $this->table->column('avatar', \swoole_table::TYPE_STRING, 255);
+        // $this->table->column('name', \swoole_table::TYPE_STRING, 255);
+        // $this->table->column('avatar', \swoole_table::TYPE_STRING, 255);
         $this->table->create();
     }
 

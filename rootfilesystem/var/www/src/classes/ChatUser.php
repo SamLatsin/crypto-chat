@@ -21,8 +21,9 @@ class ChatUser{
 
   function getUsersRecipients($chat_id, $sender_id) {
     $phql = 'SELECT user_id FROM '.$this->model.' WHERE chat_id = $1 and user_id != $2';
-    $this->db->prepare('get_users_in_chat', $phql);
-    $res = $this->db->execute('get_users_in_chat', [$chat_id, $sender_id]);
+    $random = uniqid();
+    $this->db->prepare('get_users_in_chat_'.$chat_id.'_'.$sender_id.'_'.$random, $phql);
+    $res = $this->db->execute('get_users_in_chat_'.$chat_id.'_'.$sender_id.'_'.$random, [$chat_id, $sender_id]);
     $arr = $this->db->fetchAll($res);
     return $arr;
   }

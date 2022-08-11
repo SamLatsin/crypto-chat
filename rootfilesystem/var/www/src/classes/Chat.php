@@ -10,7 +10,7 @@ class Chat{
       $this->model = "public.chats";
   }
 
-  public function getChatsByUserId($fields){
+  public function getChatsByUserId($fields, $admin = false){
     $data = [];
     array_push($data, $fields['user_id']);
     array_push($data, $fields['offset']);
@@ -24,10 +24,13 @@ class Chat{
               INNER JOIN public.messages_stats b
                      ON a.id = b.message_id
                      WHERE 
-                     b.user_id = $1 and 
+                     b.user_id = $1';
+    if (!$admin) {
+      $phql .=     ' and 
                      b.is_deleted is false and
-                     a.is_deleted is false
-              GROUP BY chat_id
+                     a.is_deleted is false';
+    }           
+    $phql .=' GROUP BY chat_id
               ) m2
               ON cht.chat_id = m2.chat_id
               INNER JOIN public.messages msg ON msg.id = m2.id

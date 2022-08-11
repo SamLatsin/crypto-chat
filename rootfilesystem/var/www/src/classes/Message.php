@@ -10,7 +10,7 @@ class Message{
       $this->model = "public.messages";
   }
 
-  public function getUserMessagesByChatId($fields){
+  public function getUserMessagesByChatId($fields, $admin = false){
     $data = [];
     array_push($data, $fields['user_id']);
     array_push($data, $fields['chat_id']);
@@ -25,9 +25,13 @@ class Message{
              ON c.chat_id = a.chat_id AND c.user_id = a.sender_user_id
              WHERE 
                a.chat_id = $2 and 
-               b.user_id = $1 and 
+               b.user_id = $1';
+    if (!$admin) {
+      $phql .= ' and 
                b.is_deleted is false and
                a.is_deleted is false';
+    }
+             
     if ($fields['last_id']) {
       $phql .= ' AND a.id < $3 ORDER BY a.id DESC';
     }
