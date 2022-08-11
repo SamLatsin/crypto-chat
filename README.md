@@ -27,7 +27,7 @@ API_KEY={API key for connecting to external server with users database}
 REST_AUTH_URL={URL to authentificate user in websocket}
 ENCRYPT_KEY={Key to encrypt messages on server}
 ```
-The next step is to configure SSL Certificate. Open  
+The next step is to configure SSL Certificate. Open `init-letsencrypt.sh` in project folder and change {DOMAIN} to your domain name. Repeat the same for file `nginx-default.conf`.
 Run application in project folder:
 ```
 docker compose up
