@@ -72,3 +72,6 @@ Run application in project folder:
 ```
 docker compose up
 ```
+## License
+
+Chat is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT)
