@@ -24,6 +24,7 @@ Fast, asynchronous and event-driven backend service that can solve the problem o
 * Message deleting (for all and locally for you)
 * Support for custom events via websocket (it can be used to add your new custom features to the chat)
 * Emoji support 😋
+* Embedded FTP server
 * Auto renewing SSL ([Let's encrypt](https://letsencrypt.org))
 * HTTP requests optimization
 * High request proccess speed (around 110515 requests/sec on low-end server)
@@ -59,10 +60,12 @@ PG_USER={PostgreSQL username}
 PG_PASSWORD={PostgreSQL password}
 FTP_USER={FTP username}
 FTP_PASSWORD={FTP password}
-API_KEY={API key for connecting to external server with users database}
+API_KEY={API key for connecting to external server with users database }
 REST_AUTH_URL={URL to authentificate user in websocket}
 ENCRYPT_KEY={Key to encrypt messages on server}
 ```
+For additional help with API_KEY and REST_AUTH_URL see this in [documentation](https://sam-latsin.gitbook.io/crypto-chat-api-eng/api-reference/main-server)
+
 The next step is to configure SSL Certificate. Open `init-letsencrypt.sh` in project folder and change {DOMAIN} to your domain name. Repeat the same for file `nginx-default.conf`.
 
 Run application in project folder:
