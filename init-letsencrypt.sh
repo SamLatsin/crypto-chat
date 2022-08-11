@@ -1,6 +1,6 @@
 #!/bin/bash
 
-domains=(serverchat.online)
+domains=({DOMAIN})
 rsa_key_size=4096
 data_path="./data/certbot"
 email="" # Adding a valid address is strongly recommended
