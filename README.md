@@ -74,4 +74,4 @@ docker compose up
 ```
 ## License
 
-Chat is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT)
+Crypto-chat is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT)
